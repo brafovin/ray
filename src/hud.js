@@ -28,6 +28,8 @@ export class HUD {
       weapons: $('weapons'), radar: $('radar'), radarRange: $('radarRange'),
       markers: $('markers'), killfeed: $('killfeed'), notice: $('notice'), fps: $('fps'),
       vignette: $('vignette'), crosshair: $('crosshair'),
+      dispersion: $('dispersion'), hitmarks: $('hitmarks'), optics: $('optics'),
+      rangeinfo: $('rangeinfo'), rangeText: $('rangeText'), flightText: $('flightText'),
       lockinfo: $('lockinfo'), lockName: $('lockName'), lockHp: $('lockHp'), lockDist: $('lockDist'),
       pause: $('pause'), gameover: $('gameover'), goTitle: $('goTitle'), goStats: $('goStats'),
     };
@@ -148,8 +150,20 @@ export class HUD {
       }
     });
 
-    this.el.wave.textContent = game.wave;
-    this.el.enemies.textContent = game.ships.filter((s) => s.alive && s.team !== p.team).length;
+    if (game.pvp) {
+      const mine = game.ships.filter((s) => s.alive && s.team === p.team).length;
+      const foes = game.ships.filter((s) => s.alive && s.team !== p.team).length;
+      this.el.wave.textContent = mine;
+      this.el.enemies.textContent = foes;
+      if (!this._pvpLabels) {
+        this._pvpLabels = true;
+        this.el.wave.previousElementSibling.textContent = 'EIGENE';
+        this.el.enemies.previousElementSibling.textContent = 'GEGNER';
+      }
+    } else {
+      this.el.wave.textContent = game.wave;
+      this.el.enemies.textContent = game.ships.filter((s) => s.alive && s.team !== p.team).length;
+    }
     this.el.score.textContent = Math.floor(game.score).toLocaleString('de-DE');
 
     this.fpsAcc = (this.fpsAcc ?? 0) + dt;
@@ -161,6 +175,7 @@ export class HUD {
     }
 
     this._markers(game);
+    this._gunnery(game);
     this._radar(game);
 
     if (this.noticeTimer > 0) {
@@ -171,6 +186,56 @@ export class HUD {
       this.hurtTimer -= dt;
       if (this.hurtTimer <= 0) this.el.vignette.classList.remove('hurt');
     }
+  }
+
+  /** Impact ellipse, range and time of flight - the shooting aids. */
+  _gunnery(game) {
+    const p = game.player;
+    const info = game.aimInfo;
+    const centre = game.project(game.aimWorld, 0);
+    const edge = game.aimEdge ? game.project(game.aimEdge, 0) : null;
+
+    if (centre && edge && p.alive) {
+      const r = Math.max(9, Math.hypot(edge.x - centre.x, edge.y - centre.y));
+      const d = this.el.dispersion;
+      d.style.display = 'block';
+      d.style.left = `${centre.x}px`;
+      d.style.top = `${centre.y}px`;
+      d.style.width = `${r * 2}px`;
+      d.style.height = `${r * 0.85}px`;
+      d.classList.toggle('out', !info.inRange);
+    } else {
+      this.el.dispersion.style.display = 'none';
+    }
+
+    this.el.rangeText.textContent = `${Math.round(info.dist)} m`;
+    this.el.flightText.textContent = info.inRange
+      ? `FLUGZEIT ${info.flight.toFixed(1)} s`
+      : 'AUSSER REICHWEITE';
+    this.el.rangeinfo.classList.toggle('out', !info.inRange);
+    this.el.optics.classList.toggle('hidden', !game.zoomOptics);
+
+    if (this.hitFlash > 0) {
+      this.hitFlash -= 1 / 60;
+      if (this.hitFlash <= 0) this.el.crosshair.classList.remove('hit');
+    }
+  }
+
+  /** Floating damage number plus a crosshair punch. */
+  hitMarker(damage, screenPos) {
+    this.el.crosshair.classList.remove('hit');
+    void this.el.crosshair.offsetWidth;
+    this.el.crosshair.classList.add('hit');
+    this.hitFlash = 0.18;
+    if (!screenPos) return;
+    const el = document.createElement('div');
+    el.className = 'hitmark';
+    el.textContent = `-${damage}`;
+    el.style.left = `${screenPos.x}px`;
+    el.style.top = `${screenPos.y}px`;
+    this.el.hitmarks.appendChild(el);
+    setTimeout(() => el.remove(), 950);
+    while (this.el.hitmarks.children.length > 24) this.el.hitmarks.firstChild.remove();
   }
 
   _markers(game) {

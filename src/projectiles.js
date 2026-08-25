@@ -122,6 +122,7 @@ export class Projectiles {
       age: 0,
       damage: o.damage ?? w.damage,
       pierced: 0,
+      local: o.local !== false,   // ghost rounds from other clients do no damage
       phase: o.vertical ? 'boost' : 'run',
       boost: o.vertical ? 0.55 : 0,
       trailTimer: 0,
@@ -200,8 +201,10 @@ export class Projectiles {
       // ship hits
       for (const ship of game.ships) {
         if (this._hitShip(p, ship, dt)) {
-          game.damage(ship, p.damage, p.owner, p.pos);
-          if (p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash, p.weapon.splashDamage, p.owner, ship);
+          if (p.local) {
+            game.damage(ship, p.damage, p.owner, p.pos);
+            if (p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash, p.weapon.splashDamage, p.owner, ship);
+          }
           const big = p.kind === 'torpedo' ? 2.4 : p.kind === 'flak' ? 0.35 : 1.1;
           if (p.kind === 'flak') fx.addFlash(p.pos, 1.0, 0.06, 0xfff1b8);
           else fx.explosion(p.pos, big);
@@ -240,7 +243,7 @@ export class Projectiles {
             done = true;
           } else {
             fx.waterSplash(p.pos, p.kind === 'shell' ? 1.4 : 2.0);
-            if (p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash * 0.7, p.weapon.splashDamage * 0.5, p.owner);
+            if (p.local && p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash * 0.7, p.weapon.splashDamage * 0.5, p.owner);
             done = true;
           }
         } else {

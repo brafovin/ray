@@ -97,6 +97,8 @@ export const WEAPONS = {
   },
 };
 
+for (const [key, def] of Object.entries(WEAPONS)) def.id = key;
+
 export function weaponRuntime(id) {
   const def = WEAPONS[id];
   return {

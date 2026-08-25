@@ -31,7 +31,8 @@
       <span><b>A</b>/<b>D</b> Ruder</span>
       <span><b>Maus</b> Zielen</span>
       <span><b>LMB</b> Hauptwaffe</span>
-      <span><b>RMB</b> Raketen/Torpedos</span>
+      <span><b>RMB</b> Zieloptik</span>
+      <span><b>E</b> Raketen/Torpedos</span>
       <span><b>Q</b> Nahbereich</span>
       <span><b>1&ndash;3</b> Waffe</span>
       <span><b>T</b> Ziel</span>
@@ -41,7 +42,58 @@
       <span><b>G</b> Grafik</span>
       <span><b>Esc</b> Pause</span>
     </div>
-    <button id="startBtn" class="primary">GEFECHT STARTEN</button>
+    <div class="menu-actions">
+      <button id="startBtn" class="primary">EINZELGEFECHT</button>
+      <button id="mpBtn">MEHRSPIELER-RAUM</button>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- Lobby -->
+<div id="lobby" class="screen hidden">
+  <div class="menu-head">
+    <h1>MEHRSPIELER<span>-RAUM</span></h1>
+    <p class="sub">Zwei Flotten &middot; Mensch gegen Mensch &middot; Bots fuellen leere Plaetze</p>
+  </div>
+
+  <div id="lobbyConnect" class="lobby-connect">
+    <div class="panel connect-panel">
+      <label class="field"><span>DEIN NAME</span><input id="pName" maxlength="18" placeholder="Kapitaen" /></label>
+      <button id="createRoom" class="primary">RAUM ERSTELLEN</button>
+      <div class="or">oder</div>
+      <label class="field"><span>RAUM-CODE</span><input id="joinCode" maxlength="4" placeholder="ABCD" /></label>
+      <button id="joinRoom">RAUM BEITRETEN</button>
+      <p id="lobbyError" class="err"></p>
+      <button id="lobbyBack" class="ghost">ZURUECK</button>
+    </div>
+  </div>
+
+  <div id="lobbyRoom" class="lobby-room hidden">
+    <div class="room-code">
+      RAUM-CODE <b id="roomCode">----</b>
+      <button id="copyCode" class="tiny">KOPIEREN</button>
+    </div>
+    <div class="teams">
+      <div class="team blue">
+        <h3>BLAUE FLOTTE <span id="blueCount">0</span></h3>
+        <ul id="teamBlue"></ul>
+        <button class="tiny join" data-team="0">HIER MITFAHREN</button>
+      </div>
+      <div class="team red">
+        <h3>ROTE FLOTTE <span id="redCount">0</span></h3>
+        <ul id="teamRed"></ul>
+        <button class="tiny join" data-team="1">HIER MITFAHREN</button>
+      </div>
+    </div>
+    <div class="lobby-foot">
+      <label class="field inline"><span>SCHIFF</span>
+        <select id="lobbyShip"></select>
+      </label>
+      <button id="readyBtn">BEREIT</button>
+      <button id="launchBtn" class="primary">AUSLAUFEN</button>
+      <button id="leaveRoom" class="ghost">RAUM VERLASSEN</button>
+    </div>
+    <p class="hint" id="lobbyHint">Der Host startet das Gefecht. Leere Plaetze werden mit Bots aufgefuellt (3 Schiffe pro Flotte).</p>
   </div>
 </div>
 
@@ -61,6 +113,10 @@
   </div>
 
   <div id="markers"></div>
+  <div id="dispersion"></div>
+  <div id="hitmarks"></div>
+  <div id="optics" class="hidden"></div>
+  <div id="rangeinfo"><span id="rangeText">—</span><small id="flightText"></small></div>
 
   <div id="topbar">
     <div class="chip"><label>WELLE</label><b id="waveNum">1</b></div>

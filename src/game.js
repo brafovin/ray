@@ -4,10 +4,11 @@ import { createWorld, ARENA_RADIUS, SUN_DIR } from './world.js';
 import { Renderer, QUALITY } from './render.js';
 import { Effects } from './effects.js';
 import { Projectiles } from './projectiles.js';
+import { WEAPONS } from './weapons.js';
 import { Ship } from './ship.js';
 import { AI } from './ai.js';
-import { SHIPS } from './ships.js';
-import { clamp, damp, rand, waveHeight, TAU } from './math.js';
+import { SHIPS, SHIP_BY_ID } from './ships.js';
+import { clamp, damp, makeRng, rand, waveHeight, TAU } from './math.js';
 
 const _v = new THREE.Vector3();
 const _p = new THREE.Vector3();
@@ -26,15 +27,23 @@ export class Game {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.5, 12000);
     this.gfx.attach(this.scene, this.camera);
+    this.spectateTarget = null;
 
-    const world = createWorld(this.scene);
+    this.worldSeed = 12345;
+    const world = createWorld(this.scene, this.worldSeed);
+    this.world = world;
     this.islands = world.islands;
     this.sun = world.sun;
     this.clouds = world.clouds;
     this.scene.environment = this.gfx.environmentFrom(world.sky);
-    this.ocean = createOcean();
-    this.scene.add(this.ocean.mesh);
 
+    this.ocean = createOcean({
+      sunDir: SUN_DIR,
+      fogColor: this.scene.fog.color.getHex(),
+      fogDensity: this.scene.fog.density,
+    });
+    this.ocean.setIslands(this.islands);
+    this.scene.add(this.ocean.mesh);
     this.effects = new Effects(this.scene);
     this.projectiles = new Projectiles(this.scene, this);
 
@@ -54,6 +63,17 @@ export class Game {
     this.stats = { kills: 0, damage: 0, intercepts: 0 };
     this.aimWorld = new THREE.Vector3();
     this.leadPoint = null;
+    this.aimInfo = { dist: 0, flight: 0, spread: 0, inRange: false };
+    this.zoomOptics = false;
+    this.baseFov = 62;
+    this.shake = 0;
+
+    // multiplayer
+    this.net = null;
+    this.pvp = false;
+    this.byNetId = new Map();
+    this.netTimer = 0;
+    this.teamNames = ['Blaue Flotte', 'Rote Flotte'];
 
     addEventListener('resize', () => this.resize());
     this.resize();
@@ -61,12 +81,14 @@ export class Game {
 
   resize() {
     this.gfx.resize();
+    this.ocean.resize(innerWidth, innerHeight);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
   }
 
   cycleQuality() {
     const name = this.gfx.setQuality(this.gfx.quality + 1);
+    this.ocean.setReflectionEnabled(this.gfx.quality < 2);
     this.hud.notice(`GRAFIK: ${name}`, 1.4);
   }
 
@@ -82,11 +104,32 @@ export class Game {
     }
   }
 
+  /** Every client in a room must see identical islands. */
+  rebuildWorld(seed) {
+    if (seed === this.worldSeed) return;
+    this.worldSeed = seed;
+    this.scene.remove(this.world.group);
+    this.world.group.traverse((o) => {
+      if (o.isMesh) {
+        o.geometry.dispose();
+        if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
+        else o.material?.dispose();
+      }
+    });
+    const world = createWorld(this.scene, seed);
+    this.world = world;
+    this.islands = world.islands;
+    this.sun = world.sun;
+    this.clouds = world.clouds;
+    this.ocean.setIslands(this.islands);
+  }
+
   // --------------------------------------------------------------- setup
   clearShips() {
     for (const s of this.ships) s.dispose();
     this.ships.length = 0;
     this.ais.length = 0;
+    this.byNetId.clear();
     this.projectiles.clear();
     this.player = null;
   }
@@ -106,6 +149,10 @@ export class Game {
 
   start(def) {
     this.clearShips();
+    this.pvp = false;
+    this.net = null;
+    this.matchOver = false;
+    this.spectateTarget = null;
     this.mode = 'battle';
     this.score = 0;
     this.wave = 1;
@@ -122,6 +169,148 @@ export class Game {
     this.hud.buildWeaponCards(player);
     this.spawnWave();
     this.hud.notice(`WELLE ${this.wave}`, 2.2);
+  }
+
+  /**
+   * Team battle against other people. Every client builds the identical roster
+   * from the room state; each client simulates only its own ship (and, on the
+   * host, the bots that fill the teams).
+   */
+  startPvp({ net, seed, spawns, players, teamSize = 3 }) {
+    this.clearShips();
+    this.rebuildWorld(seed);
+    this.net = net;
+    this.pvp = true;
+    this.mode = 'battle';
+    this.score = 0;
+    this.wave = 1;
+    this.activeWeapon = 0;
+    this.overShown = false;
+    this.stats = { kills: 0, damage: 0, intercepts: 0 };
+
+    const isHost = net.room.host === net.id;
+    const rng = makeRng(seed);
+
+    for (const p of players) {
+      const def = SHIP_BY_ID[p.ship] ?? SHIPS[0];
+      const sp = spawns[p.id] ?? { x: 0, z: p.team === 0 ? -1400 : 1400, h: p.team === 0 ? 0 : Math.PI };
+      const mine = p.id === net.id;
+      const ship = new Ship(def, p.team, this.scene, {
+        x: sp.x, z: sp.z, heading: sp.h,
+        isPlayer: mine,
+        remote: !mine,
+        owned: mine,
+        netId: p.id,
+        name: p.name,
+      });
+      this.ships.push(ship);
+      this.byNetId.set(p.id, ship);
+      if (mine) this.player = ship;
+    }
+
+    // Bots fill both fleets. Their roster is derived from the seed, so every
+    // client creates the same ones; only the host actually steers them.
+    const counts = [0, 0];
+    for (const p of players) counts[p.team]++;
+    const hostId = net.room.host;
+    let n = 0;
+    for (const team of [0, 1]) {
+      for (let i = counts[team]; i < teamSize; i++) {
+        const def = SHIPS[rng.int(0, SHIPS.length - 1)];
+        const side = team === 0 ? -1 : 1;
+        const ship = new Ship(def, team, this.scene, {
+          x: (i - 1) * 520 + rng.range(-90, 90),
+          z: side * 1150,
+          heading: side > 0 ? Math.PI : 0,
+          remote: !isHost,
+          owned: isHost,
+          netId: `${hostId}:b${n}`,
+          name: `${def.name} [Bot]`,
+        });
+        this.ships.push(ship);
+        this.byNetId.set(ship.netId, ship);
+        if (isHost) this.ais.push(new AI(ship, this, 0.55));
+        n++;
+      }
+    }
+
+    this.hud.buildWeaponCards(this.player);
+    this.hud.notice('GEFECHT LAEUFT', 2);
+  }
+
+  /** Wire the room socket into the running battle. */
+  attachNet(net) {
+    this.net = net;
+    net.on('state', (m) => {
+      const s = this.byNetId.get(m.id);
+      if (s && s.remote) s.applyNetState(m.s);
+    });
+    net.on('bots', (m) => {
+      for (const b of m.b) {
+        const s = this.byNetId.get(b.id);
+        if (s && s.remote) s.applyNetState(b.s);
+      }
+    });
+    net.on('fire', (m) => this._netFire(m.id, m.f));
+    net.on('hit', (m) => {
+      const s = this.byNetId.get(m.id);
+      if (s && s.owned && s.alive) this.damage(s, m.dmg, this.byNetId.get(m.from) ?? null, s.pos);
+    });
+    net.on('dead', (m) => {
+      const s = this.byNetId.get(m.id);
+      if (s && s.alive) this.destroy(s, this.byNetId.get(m.by) ?? null, true);
+    });
+    net.on('left', (m) => {
+      const s = this.byNetId.get(m.id);
+      if (s) {
+        if (s.alive) this.destroy(s, null);
+        this.byNetId.delete(m.id);
+      }
+    });
+  }
+
+  _netFire(netId, f) {
+    const ship = this.byNetId.get(netId);
+    if (!ship) return;
+    const def = WEAPONS[f.w];
+    if (!def) return;
+    const target = f.tgt ? this.byNetId.get(f.tgt) : null;
+    this.projectiles.spawn({
+      weapon: def,
+      pos: new THREE.Vector3(f.x, f.y, f.z),
+      dir: new THREE.Vector3(f.dx, f.dy, f.dz),
+      owner: ship,
+      target: target && target.alive ? target : null,
+      vertical: !!f.v,
+      damage: def.damage,
+      local: false,
+    });
+    this.onShipFired(ship, def, new THREE.Vector3(f.x, f.y, f.z), null, true);
+  }
+
+  _netTick(dt) {
+    if (!this.net || !this.net.connected) return;
+    this.netTimer -= dt;
+    if (this.netTimer > 0) return;
+    this.netTimer = 1 / 15;
+
+    if (this.player && this.player.alive) this.net.send({ t: 'state', s: this.player.netState() });
+
+    if (this.net.room && this.net.room.host === this.net.id) {
+      const bots = [];
+      for (const s of this.ships) {
+        if (s.owned && s !== this.player && s.alive && s.netId) bots.push({ id: s.netId, s: s.netState() });
+      }
+      if (bots.length) this.net.send({ t: 'bots', b: bots });
+
+      // the host calls the match
+      const alive = [0, 0];
+      for (const s of this.ships) if (s.alive) alive[s.team]++;
+      if (!this.matchOver && (alive[0] === 0 || alive[1] === 0)) {
+        this.matchOver = true;
+        this.net.send({ t: 'over', winner: alive[0] === 0 ? 1 : 0 });
+      }
+    }
   }
 
   spawnWave() {
@@ -160,6 +349,20 @@ export class Game {
   // -------------------------------------------------------------- combat
   damage(ship, amount, source, point) {
     if (!ship.alive || amount <= 0) return;
+    if (this.pvp && !ship.owned) {
+      // the owning client is authoritative for its own hit points
+      if (source && source.owned && ship.netId) {
+        this.net?.send({ t: 'hit', id: ship.netId, dmg: Math.round(amount), w: 0 });
+        this.stats.damage += amount;
+        this.score += amount * 0.5;
+        if (source === this.player && this._hitSound !== this.time) {
+          this._hitSound = this.time;
+          this.audio.hit();
+        }
+        if (source === this.player) this.hud.hitMarker(Math.round(amount), this.project(point ?? ship.pos, 6));
+      }
+      return;
+    }
     const armor = 1 - (ship.def.armor - 0.5) * 0.4;
     // the player is outnumbered: give them a standing defensive edge
     const dmg = amount * ship.damageMul * armor * (ship.isPlayer ? 0.72 : 1);
@@ -173,7 +376,9 @@ export class Game {
         this._hitSound = this.time;
         this.audio.hit();
       }
+      this.hud.hitMarker(Math.round(dmg), this.project(point ?? ship.pos, 6));
     }
+    if (ship === this.player && dmg > ship.maxHp * 0.02) this.shake = Math.min(1.4, this.shake + dmg / ship.maxHp * 3);
     if (ship === this.player) {
       this.hud.hurt();
       if (dmg > ship.maxHp * 0.04) this.audio.alarm();
@@ -189,7 +394,11 @@ export class Game {
     }
   }
 
-  destroy(ship, source) {
+  destroy(ship, source, fromNet = false) {
+    if (!ship.alive) return;
+    if (this.pvp && ship.owned && !fromNet) {
+      this.net?.send({ t: 'dead', id: ship.netId, by: source?.netId ?? null });
+    }
     ship.alive = false;
     ship.hp = 0;
     ship.sinkTimer = 0;
@@ -204,8 +413,13 @@ export class Game {
 
     if (ship === this.player) {
       this.hud.addKill(`${ship.name} wurde versenkt`, 'bad');
-      this.mode = 'over';
-      this.overTimer = 3;
+      if (this.pvp) {
+        this.hud.notice('VERSENKT - ZUSCHAUERMODUS', 3);
+        this.spectate();
+      } else {
+        this.mode = 'over';
+        this.overTimer = 3;
+      }
       return;
     }
     if (ship.team === this.player?.team) {
@@ -223,6 +437,12 @@ export class Game {
     if (this.player && this.player.lockTarget === ship) this.player.lockTarget = null;
   }
 
+  /** Follow a surviving team mate after going down. */
+  spectate() {
+    const mates = this.ships.filter((s) => s.alive && s.team === this.player.team && s !== this.player);
+    this.spectateTarget = mates[0] ?? this.ships.find((s) => s.alive) ?? null;
+  }
+
   onIntercept(owner) {
     if (owner === this.player) {
       this.stats.intercepts++;
@@ -230,7 +450,23 @@ export class Game {
     }
   }
 
-  onShipFired(ship, def, pos) {
+  onShipFired(ship, def, pos, dir = null, fromNet = false) {
+    if (this.pvp && !fromNet && ship.owned && dir && def.kind !== 'flak') {
+      this.net?.send({
+        t: 'fire',
+        f: {
+          w: def.id,
+          x: +pos.x.toFixed(1), y: +pos.y.toFixed(1), z: +pos.z.toFixed(1),
+          dx: +dir.x.toFixed(4), dy: +dir.y.toFixed(4), dz: +dir.z.toFixed(4),
+          v: !!ship._lastVertical,
+          tgt: ship.lockTarget?.netId ?? null,
+        },
+      });
+    }
+    if (ship === this.player) {
+      const punch = def.kind === 'shell' ? def.damage / 900 : def.kind === 'rail' ? 0.5 : 0.12;
+      this.shake = Math.min(1.2, this.shake + punch);
+    }
     const d = this.player ? pos.distanceTo(this.player.pos) : 0;
     if (d > 3200) return;
     if (def.kind === 'shell') this.audio.gun(d, def.damage > 250 ? 1.5 : def.damage > 120 ? 1.1 : 0.8);
@@ -311,8 +547,9 @@ export class Game {
     if (inp.hit('KeyG')) this.cycleQuality();
 
     if (inp.mouse.left) p.fire(this.activeWeapon);
-    if (inp.mouse.right) p.fire(1);
+    if (inp.down('KeyE')) p.fire(1);
     if (inp.down('KeyQ')) p.fire(2);
+    this.zoomOptics = inp.mouse.right || inp.down('ShiftLeft');
 
     this.autoLock();
   }
@@ -330,21 +567,35 @@ export class Game {
 
     this.leadPoint = null;
     const target = p.lockTarget;
+    const w = p.weapons[this.activeWeapon];
     if (target && target.alive) {
       _v.copy(target.pos).sub(origin).normalize();
       if (_v.dot(dir) > 0.93) {
-        const w = p.weapons[this.activeWeapon];
         this.leadSolution(p, target, w.def.speed, this.aimWorld);
         this.leadPoint = this.aimWorld.clone();
       }
     }
     p.aimPoint.copy(this.aimWorld);
+
+    const dist = p.pos.distanceTo(this.aimWorld);
+    this.aimInfo.dist = dist;
+    this.aimInfo.flight = dist / w.def.speed;
+    // dispersion at that range, tightened while the optics are up
+    this.aimInfo.spread = dist * w.def.spread * (this.zoomOptics ? 0.55 : 1);
+    this.aimInfo.inRange = dist <= w.def.range;
+    // a second point one dispersion-radius to the side, so the HUD can size
+    // the impact ellipse in pixels
+    (this.aimEdge ||= new THREE.Vector3())
+      .set(dir.z, 0, -dir.x)
+      .normalize()
+      .multiplyScalar(this.aimInfo.spread)
+      .add(this.aimWorld);
   }
 
   // ---------------------------------------------------------------- camera
   updateCamera(dt) {
     const inp = this.input;
-    const focus = this.player ?? this.previewShip;
+    const focus = (this.player && this.player.alive ? this.player : this.spectateTarget) ?? this.player ?? this.previewShip;
     if (!focus) return;
 
     if (this.mode === 'preview') {
@@ -393,8 +644,10 @@ export class Game {
     this.time += dt;
 
     if (this.mode === 'battle') {
-      this.handlePlayer(dt);
-      this.updateAim();
+      if (this.player.alive) {
+        this.handlePlayer(dt);
+        this.updateAim();
+      }
       for (const ai of this.ais) ai.update(dt);
     } else if (this.mode === 'preview' && this.previewShip) {
       const s = this.previewShip;
@@ -424,9 +677,13 @@ export class Game {
     this.effects.update(dt, this.time);
     this.updateCamera(dt);
     this.ocean.update(this.time, this.camera);
+    const focus = this.player ?? this.previewShip;
+    this.ocean.setShips(this.ships, focus ? focus.pos : this.camera.position);
     this._updateSky(dt);
 
-    if (this.mode === 'battle') {
+    this._netTick(dt);
+
+    if (this.mode === 'battle' && !this.pvp) {
       const enemies = this.ships.filter((s) => s.alive && s.team !== this.player.team).length;
       if (enemies === 0) {
         if (this.waveTimer <= 0) {
@@ -462,6 +719,7 @@ export class Game {
   }
 
   render() {
+    this.ocean.renderReflection(this.renderer, this.scene, this.camera);
     this.gfx.render();
   }
 }

@@ -550,6 +550,31 @@ export function buildShipMesh(def) {
   return { root, mounts, radars, funnels: extra.funnels ?? [], deckY: extra.deckY };
 }
 
+/** Team colours: a stern flag and hull flashes so friend/foe reads at a glance. */
+export function addTeamMarkings(root, def, colorHex) {
+  const hull = def.hull;
+  const m = new THREE.MeshStandardMaterial({
+    color: colorHex,
+    emissive: colorHex,
+    emissiveIntensity: 0.35,
+    roughness: 0.6,
+    flatShading: true,
+  });
+  const flagPole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5, 5), mat(0x22262a));
+  flagPole.position.set(0, hull.deck + 2.5, -hull.length * 0.46);
+  root.add(flagPole);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.4), m);
+  flag.position.set(2.1, hull.deck + 4.0, -hull.length * 0.46);
+  flag.material.side = THREE.DoubleSide;
+  root.add(flag);
+  for (const side of [-1, 1]) {
+    const flash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, 7), m);
+    flash.position.set(side * (hull.beam * 0.5 + 0.1), hull.deck - 1.1, hull.length * 0.3);
+    root.add(flash);
+  }
+  return root;
+}
+
 /** Small silhouette used by the ship-select screen. */
 export function buildPreview(def) {
   const { root, radars } = buildShipMesh(def);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildShipMesh } from './shipMesh.js';
+import { buildShipMesh, addTeamMarkings } from './shipMesh.js';
 import { WEAPONS, weaponRuntime, GRAVITY } from './weapons.js';
 import { angleDelta, clamp, damp, lerp, rand, waveHeight, waveSlope, TAU } from './math.js';
 import { ARENA_RADIUS } from './world.js';
@@ -69,6 +69,56 @@ export class Ship {
     this.kills = 0;
 
     this.radius = def.hull.length * 0.5;
+
+    // --- networking
+    this.netId = opts.netId ?? null;
+    this.remote = !!opts.remote;         // driven by another client
+    this.owned = opts.owned ?? true;     // this client decides its hit points
+    this.netTarget = { x: this.pos.x, z: this.pos.z, h: this.heading };
+    this.teamColor = opts.teamColor ?? (team === 0 ? 0x49b6ff : 0xff5340);
+    addTeamMarkings(this.group, def, this.teamColor);
+  }
+
+  /** Latest snapshot from the owning client. */
+  applyNetState(s) {
+    this.netTarget.x = s.x;
+    this.netTarget.z = s.z;
+    this.netTarget.h = s.h;
+    this.speed = s.sp;
+    if (typeof s.hp === 'number') this.hp = s.hp;
+    this.targetDepth = s.d ?? 0;
+    if (s.ax !== undefined) this.aimPoint.set(s.ax, s.ay, s.az);
+    this.throttle = s.th ?? this.throttle;
+    this.rudder = s.ru ?? this.rudder;
+  }
+
+  netState() {
+    return {
+      x: +this.pos.x.toFixed(2),
+      z: +this.pos.z.toFixed(2),
+      h: +this.heading.toFixed(3),
+      sp: +this.speed.toFixed(2),
+      hp: Math.round(this.hp),
+      d: +this.depth.toFixed(2),
+      th: +this.throttle.toFixed(2),
+      ru: +this.rudder.toFixed(2),
+      ax: +this.aimPoint.x.toFixed(1),
+      ay: +this.aimPoint.y.toFixed(1),
+      az: +this.aimPoint.z.toFixed(1),
+    };
+  }
+
+  /** Smooth follow of the networked position, with dead reckoning in between. */
+  _netDrive(dt) {
+    const t = this.netTarget;
+    const k = 1 - Math.exp(-9 * dt);
+    this.heading += angleDelta(this.heading, t.h) * k;
+    const fwd = this.forward;
+    t.x += fwd.x * this.speed * dt;
+    t.z += fwd.z * this.speed * dt;
+    this.pos.x += (t.x - this.pos.x) * k;
+    this.pos.z += (t.z - this.pos.z) * k;
+    this.velocity.copy(fwd).multiplyScalar(this.speed);
   }
 
   get forward() {
@@ -273,7 +323,8 @@ export class Ship {
     } else if (def.kind === 'torpedo') {
       game.effects.waterSplash(_v, 1.2);
     }
-    game.onShipFired(this, def, _v);
+    this._lastVertical = mount.vertical;
+    game.onShipFired(this, def, _v, dir);
     return true;
   }
 
@@ -515,7 +566,8 @@ export class Ship {
       return;
     }
     this._updateSpecial(dt);
-    this._drive(dt, game);
+    if (this.remote) this._netDrive(dt);
+    else this._drive(dt, game);
     this._float(dt, time);
     this._aimMounts(dt);
     this._autoDefense(dt, game);

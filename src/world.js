@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { rand, randInt, TAU } from './math.js';
+import { makeRng, rand, TAU } from './math.js';
 
 export const ARENA_RADIUS = 2400;
 export const SUN_DIR = new THREE.Vector3(0.42, 0.5, -0.76).normalize();
@@ -41,7 +41,7 @@ function skyDome() {
   return mesh;
 }
 
-function buildIsland(radius) {
+function buildIsland(radius, rng) {
   const g = new THREE.Group();
   const rock = new THREE.MeshStandardMaterial({ color: 0x5b5c50, roughness: 0.95, flatShading: true });
   const sand = new THREE.MeshStandardMaterial({ color: 0xbfae7d, roughness: 1.0, flatShading: true });
@@ -61,16 +61,16 @@ function buildIsland(radius) {
   surf.position.y = 0.6;
   g.add(surf);
 
-  const peaks = randInt(2, 4);
+  const peaks = rng.int(2, 4);
   for (let i = 0; i < peaks; i++) {
-    const r = radius * rand(0.45, 0.95);
-    const h = radius * rand(0.35, 0.8);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, randInt(6, 9), 2), i % 2 ? green : rock);
-    const a = rand(0, TAU);
-    const d = i === 0 ? 0 : rand(0, radius * 0.5);
+    const r = radius * rng.range(0.45, 0.95);
+    const h = radius * rng.range(0.35, 0.8);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, rng.int(6, 9), 2), i % 2 ? green : rock);
+    const a = rng.range(0, TAU);
+    const d = i === 0 ? 0 : rng.range(0, radius * 0.5);
     cone.position.set(Math.cos(a) * d, h * 0.42, Math.sin(a) * d);
-    cone.rotation.y = rand(0, TAU);
-    cone.scale.set(1, 1, rand(0.75, 1.25));
+    cone.rotation.y = rng.range(0, TAU);
+    cone.scale.set(1, 1, rng.range(0.75, 1.25));
     g.add(cone);
   }
   return g;
@@ -127,12 +127,15 @@ function clouds(scene) {
 }
 
 /** Sky, lights, islands and the arena boundary. Returns island colliders. */
-export function createWorld(scene) {
+export function createWorld(scene, seed = 12345) {
+  const rng = makeRng(seed);
+  const group = new THREE.Group();
+  scene.add(group);
   scene.background = SKY_COLOR.clone();
   scene.fog = new THREE.FogExp2(0x9dbdd2, 0.00034);
   const sky = skyDome();
-  scene.add(sky);
-  const cloudGroup = clouds(scene);
+  group.add(sky);
+  const cloudGroup = clouds(group);
 
   const sun = new THREE.DirectionalLight(0xfff2e0, 2.2);
   sun.position.copy(SUN_DIR).multiplyScalar(900);
@@ -145,25 +148,25 @@ export function createWorld(scene) {
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.8;
   sun.shadow.camera.updateProjectionMatrix();
-  scene.add(sun);
-  scene.add(sun.target);
-  scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x1b4a63, 0.5));
-  scene.add(new THREE.AmbientLight(0x6a86a0, 0.22));
+  group.add(sun);
+  group.add(sun.target);
+  group.add(new THREE.HemisphereLight(0xcfe9ff, 0x1b4a63, 0.5));
+  group.add(new THREE.AmbientLight(0x6a86a0, 0.22));
 
   const islands = [];
   const placed = [];
   for (let i = 0; i < 9; i++) {
-    const radius = rand(55, 145);
+    const radius = rng.range(55, 145);
     let x = 0;
     let z = 0;
     for (let tries = 0; tries < 40; tries++) {
-      const a = rand(0, TAU);
+      const a = rng.range(0, TAU);
       const d = rand(360, ARENA_RADIUS - 320);
       x = Math.cos(a) * d;
       z = Math.sin(a) * d;
       if (placed.every((p) => Math.hypot(p.x - x, p.z - z) > p.radius + radius + 420)) break;
     }
-    const mesh = buildIsland(radius);
+    const mesh = buildIsland(radius, rng);
     mesh.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
@@ -171,7 +174,7 @@ export function createWorld(scene) {
       }
     });
     mesh.position.set(x, 0, z);
-    scene.add(mesh);
+    group.add(mesh);
     const col = { x, z, radius: radius * 1.35 };
     placed.push(col);
     islands.push(col);
@@ -189,7 +192,7 @@ export function createWorld(scene) {
     })
   );
   ring.position.y = 20;
-  scene.add(ring);
+  group.add(ring);
 
-  return { islands, sun, sky, clouds: cloudGroup };
+  return { group, islands, sun, sky, clouds: cloudGroup };
 }

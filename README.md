@@ -9,16 +9,36 @@ Laufzeit prozedural erzeugt.
 
 ## Starten
 
-Das Spiel nutzt ES-Module und braucht deshalb einen lokalen Webserver
-(`file://` funktioniert nicht):
-
 ```bash
-npm start          # oder: python3 -m http.server 8080
+npm start
 ```
 
-Dann `http://localhost:8080` öffnen, Schiff wählen, **GEFECHT STARTEN**.
-Beim ersten Klick ins Bild fängt die Maus die Kamera ein (Pointer Lock),
-**Esc** gibt sie wieder frei und pausiert.
+Der mitgelieferte Server (Node, ohne Abhängigkeiten) liefert das Spiel aus **und**
+betreibt die Mehrspieler-Räume. Dann `http://localhost:8080` öffnen, Schiff wählen,
+**EINZELGEFECHT** oder **MEHRSPIELER-RAUM**. Beim ersten Klick ins Bild fängt die
+Maus die Kamera ein (Pointer Lock), **Esc** gibt sie wieder frei und pausiert.
+
+## Mehrspieler: Mensch gegen Mensch
+
+Zwei Flotten — **Blau gegen Rot** — im selben Raum:
+
+1. **MEHRSPIELER-RAUM** öffnen, Namen eintragen, **RAUM ERSTELLEN**.
+2. Den vierstelligen **Raum-Code** an die Mitspieler geben (Button *KOPIEREN*).
+3. Alle anderen tragen den Code ein und drücken **RAUM BEITRETEN**.
+4. Team und Schiff lassen sich in der Lobby jederzeit wechseln; der Host startet
+   mit **AUSLAUFEN**.
+
+* Leere Plätze füllen **Bots** auf, damit jede Flotte drei Schiffe hat.
+* Alle Clients erzeugen aus demselben Raum-Seed dieselbe Karte.
+* Jeder Client simuliert nur sein eigenes Schiff (der Host zusätzlich die Bots),
+  broadcastet 15-mal pro Sekunde seinen Zustand und wird zwischendurch
+  interpoliert. Treffer meldet der Schütze, angewendet werden sie beim Getroffenen —
+  so kann niemand die eigenen Trefferpunkte verfälschen.
+* Wer versenkt wird, wechselt in den **Zuschauermodus**; die Runde endet, wenn eine
+  Flotte vollständig auf dem Meeresgrund liegt.
+
+Server auf einem anderen Rechner: `PORT=8080 node server/server.js` starten und die
+Adresse dieses Rechners im Browser öffnen.
 
 ## Steuerung
 
@@ -28,7 +48,8 @@ Beim ersten Klick ins Bild fängt die Maus die Kamera ein (Pointer Lock),
 | `A` / `D` | Ruder backbord / steuerbord |
 | Maus | Kamera und Zielen |
 | Linke Maustaste | aktive Waffe feuern |
-| Rechte Maustaste | Raketen / Torpedos |
+| Rechte Maustaste / `Shift` | Zieloptik (Zoom, halbierte Streuung) |
+| `E` | Raketen / Torpedos |
 | `Q` | Nahbereichswaffe (CIWS / Deckgeschütz) |
 | `1` `2` `3` | Waffe wählen |
 | `T` | Ziel anvisieren / nächstes Ziel |
@@ -49,9 +70,24 @@ Beim ersten Klick ins Bild fängt die Maus die Kamera ein (Pointer Lock),
 | **CVN Leviathan** | Flugzeugträger | Kampfdrohnen-Staffel, Sea-Sparrow, 3× Phalanx | Schutzschirm (−55 % Schaden) |
 | **K-431 Nerpa** | Angriffs-U-Boot | 650-mm-Schwertorpedos, Marschflugkörper, Deckgeschütz | Tauchgang (immun gegen Kanonen) |
 
+## Zielen und Schießen
+
+* Der Kreis am Fadenkreuz ist die **Trefferellipse**: so weit streut die aktive
+  Waffe auf dieser Entfernung. Rot gestrichelt heißt außer Reichweite.
+* Darunter stehen **Entfernung und Flugzeit** — bei 3 s Flugzeit fährt ein
+  Zerstörer rund 60 m weit, entsprechend musst du vorhalten.
+* Mit einem Ziel (`T`) rechnet die Feuerleitung den **Vorhaltepunkt** aus und
+  zeigt ihn als gestrichelten Kreis; die Türme zielen automatisch dorthin.
+* Die **Zieloptik** (rechte Maustaste halten) zoomt heran und halbiert die Streuung.
+* Treffer quittieren Fadenkreuz-Blitz und **Schadenszahlen**; Salven lassen die
+  Kamera zurückschlagen.
+* Die Türme sind **seegangsstabilisiert**: die Zielrechnung erfolgt in Weltkoordinaten
+  und wird in den Rumpfrahmen zurückgedreht, damit Rollen und Stampfen die Lösung
+  nicht verfälschen.
+
 ## Gefechtsregeln
 
-* Du kämpfst mit **zwei KI-Begleitschiffen** gegen eine gegnerische Flotte.
+* Im Einzelgefecht kämpfst du mit **zwei KI-Begleitschiffen** gegen eine gegnerische Flotte.
 * Welle 1 startet mit drei Gegnern; jede weitere Welle bringt einen Gegner mehr
   (bis fünf) sowie mehr Panzerung und bessere Zielgenauigkeit.
 * Zwischen den Wellen: 35 % Reparatur, volle Munition, Punktebonus.
@@ -63,9 +99,14 @@ Beim ersten Klick ins Bild fängt die Maus die Kamera ein (Pointer Lock),
 
 ## Technik
 
-* **Wasser** — ein Wellenmodell (`src/math.js`), das CPU-seitig den Auftrieb aller
-  Schiffe und GPU-seitig die Ozean-Oberfläche treibt. Das GLSL wird aus derselben
-  Tabelle generiert, damit Physik und Optik nicht auseinanderlaufen können.
+* **Wasser** — **Gerstner-Wellen**: die Wasserteilchen laufen auf Kreisbahnen, dadurch
+  spitze Kämme und flache Täler statt Sinus-Hügel. Dieselbe Wellentabelle
+  (`src/math.js`) treibt CPU-seitig den Auftrieb aller Schiffe und erzeugt das GLSL
+  für die Oberfläche, damit Physik und Optik nicht auseinanderlaufen können. Dazu
+  **echte planare Spiegelung** (die Szene wird ein zweites Mal aus der an der
+  Wasserfläche gespiegelten Kamera gerendert, mit schiefer Near-Plane), Fresnel-Mischung,
+  Sonnenglitzer, Streulicht in den Kämmen, Gischt an den Wellenkämmen, **Kelvin-Kielwasser
+  hinter jedem Schiff** und Brandung an den Stränden.
 * **Grafik** — HDR-Renderpfad mit ACES-Tonemapping, Unreal-Bloom, Sonnenschatten,
   IBL-Umgebungsreflexionen aus dem Himmels-Shader, Wolken und Entfernungsnebel.
 * **Schiffe** — vollständig prozedural gebaut (`src/shipMesh.js`): gelofteter Rumpf
@@ -95,8 +136,11 @@ src/world.js        Himmel, Licht, Wolken, Inseln, Arena
 src/effects.js      Partikel, Explosionen, Ringe
 src/ai.js           Gegner- und Begleitschiff-KI
 src/render.js       Renderpfad, Bloom, Qualitätsstufen
-src/hud.js          Schiffswahl, HUD, Radar, Marker
+src/hud.js          Schiffswahl, HUD, Radar, Marker, Zielhilfen
 src/audio.js        Synthetisierte Soundeffekte
+src/net.js          WebSocket-Client
+src/lobby.js        Mehrspieler-Lobby (Raum, Teams, Schiffswahl)
+server/server.js    Statischer Server + WebSocket-Räume (ohne Abhängigkeiten)
 vendor/             Three.js r160 (MIT) + Postprocessing-Module
 ```
 
