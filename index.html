@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Modern Warships 3D</title>
+<link rel="stylesheet" href="./styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🚢</text></svg>" />
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- ------------------------------------------------------- Ship select -->
+<div id="menu" class="screen">
+  <div class="menu-head">
+    <h1>MODERN <span>WARSHIPS</span> 3D</h1>
+    <p class="sub">Waehle dein Kriegsschiff &middot; 6 Klassen &middot; Seegefecht auf offener See</p>
+  </div>
+
+  <div class="menu-body">
+    <div id="shipList" class="ship-list"></div>
+    <aside id="shipDetail" class="detail"></aside>
+  </div>
+
+  <div class="menu-foot">
+    <div class="controls">
+      <span><b>W</b>/<b>S</b> Schub</span>
+      <span><b>A</b>/<b>D</b> Ruder</span>
+      <span><b>Maus</b> Zielen</span>
+      <span><b>LMB</b> Hauptwaffe</span>
+      <span><b>RMB</b> Raketen/Torpedos</span>
+      <span><b>Q</b> Nahbereich</span>
+      <span><b>1&ndash;3</b> Waffe</span>
+      <span><b>T</b> Ziel</span>
+      <span><b>F</b> Spezial</span>
+      <span><b>R</b> Nachladen</span>
+      <span><b>C</b> Kamera</span>
+      <span><b>G</b> Grafik</span>
+      <span><b>Esc</b> Pause</span>
+    </div>
+    <button id="startBtn" class="primary">GEFECHT STARTEN</button>
+  </div>
+</div>
+
+<!-- --------------------------------------------------------------- HUD -->
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+
+  <div id="crosshair">
+    <svg viewBox="0 0 100 100" width="100" height="100">
+      <circle cx="50" cy="50" r="18" />
+      <line x1="50" y1="18" x2="50" y2="34" />
+      <line x1="50" y1="66" x2="50" y2="82" />
+      <line x1="18" y1="50" x2="34" y2="50" />
+      <line x1="66" y1="50" x2="82" y2="50" />
+      <circle cx="50" cy="50" r="1.6" class="dot" />
+    </svg>
+  </div>
+
+  <div id="markers"></div>
+
+  <div id="topbar">
+    <div class="chip"><label>WELLE</label><b id="waveNum">1</b></div>
+    <div class="chip"><label>GEGNER</label><b id="enemyNum">5</b></div>
+    <div class="chip wide"><label>PUNKTE</label><b id="score">0</b></div>
+  </div>
+
+  <div id="killfeed"></div>
+  <div id="notice"></div>
+
+  <div id="bottomleft">
+    <div class="ship-name"><b id="myShip">-</b><span id="myClass">-</span></div>
+    <div class="bar hp"><i id="hpFill"></i><span id="hpText">100%</span></div>
+    <div class="telemetry">
+      <div class="gauge"><label>SPEED</label><b id="speedText">0</b><span>kn</span></div>
+      <div class="gauge"><label>SCHUB</label><b id="throttleText">0</b><span>%</span></div>
+      <div class="gauge"><label>KURS</label><b id="headingText">000</b><span>&deg;</span></div>
+    </div>
+    <div class="bar special"><i id="spFill"></i><span id="spText">SPEZIAL</span></div>
+  </div>
+
+  <div id="weapons"></div>
+
+  <div id="radarBox">
+    <canvas id="radar" width="230" height="230"></canvas>
+    <div class="radar-label">RADAR &middot; <span id="radarRange">3.0</span> km &middot; <span id="fps">--</span> FPS</div>
+  </div>
+
+  <div id="lockinfo" class="hidden">
+    <div class="lock-name" id="lockName">-</div>
+    <div class="lock-bar"><i id="lockHp"></i></div>
+    <div class="lock-dist"><span id="lockDist">0</span> m</div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------- End screens -->
+<div id="pause" class="screen hidden">
+  <div class="panel">
+    <h2>PAUSE</h2>
+    <p>Gefecht angehalten.</p>
+    <button id="resumeBtn" class="primary">WEITER</button>
+    <button id="quitBtn" class="ghost">SCHIFF WECHSELN</button>
+  </div>
+</div>
+
+<div id="gameover" class="screen hidden">
+  <div class="panel">
+    <h2 id="goTitle">VERSENKT</h2>
+    <div id="goStats" class="stats"></div>
+    <button id="againBtn" class="primary">NEUES GEFECHT</button>
+    <button id="menuBtn" class="ghost">ZUR SCHIFFSWAHL</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
