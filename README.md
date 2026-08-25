@@ -109,9 +109,22 @@ Adresse dieses Rechners im Browser öffnen.
   hinter jedem Schiff** und Brandung an den Stränden.
 * **Grafik** — HDR-Renderpfad mit ACES-Tonemapping, Unreal-Bloom, Sonnenschatten,
   IBL-Umgebungsreflexionen aus dem Himmels-Shader, Wolken und Entfernungsnebel.
-* **Schiffe** — vollständig prozedural gebaut (`src/shipMesh.js`): gelofteter Rumpf
-  aus dem Wasserlinien-Umriss, Aufbauten je Klasse, drehbare Türme mit Rohrelevation,
-  VLS-Zellen, Torpedorohre, rotierende Radarantennen.
+  Am Ende der Kette liegt ein **Grading-Pass**: Farbkorrektur, Vignette, Sensorkorn,
+  chromatische Aberration zu den Rändern und ein Sonnenreflex mit Streifen, sobald
+  du in die Sonne blickst. Mündungsfeuer und Explosionen setzen **dynamische Lichter**,
+  die Wasser und Rümpfe wirklich anleuchten; der Bug wirft **Gischt**, wenn er in
+  eine Welle einsticht.
+* **Schiffe** — vollständig prozedural gebaut (`src/shipMesh.js`), mehrere hundert
+  Bauteile pro Schiff: gelofteter Rumpf mit **Deckssprung, Bugausfall und Knickspant**,
+  Wasserpass, Bullaugen, Ankerklüsen und Ankerspill, Poller, Lüfter und Decksluken,
+  Reling mit Stützen, Rettungsinsel-Container, RHIB in den Davits, Leitern, Laufstege,
+  Satellitenkuppeln, Antennen, Positionslampen, Wellen, Schrauben und Ruder.
+  Dazu je Klasse: mehrstöckige Aufbauten mit Fensterbändern und Brückennocken,
+  Gittermast mit Radarpanelen, Schornstein mit Kappe, Helideck samt Hubschrauber,
+  Flugdeck mit Markierungen, Katapult, Fangseilen und Staffel an Deck, Turm mit
+  Rohrwiege und Mündungsbremse, VLS-Zellen mit Einzelluken, Torpedorohre.
+  Alle statischen Teile werden pro Material zusammengeführt (`src/detail.js`),
+  ein Schiff kostet dadurch nur eine Handvoll Draw-Calls.
 * **Waffen** — ballistische Granaten, durchschlagende Railgun-Geschosse, Raketen mit
   Boost-, Marsch- und Endanflugphase, Torpedos knapp unter der Oberfläche,
   Kamikaze-Drohnen und Flak zur Raketenabwehr.

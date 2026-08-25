@@ -720,6 +720,7 @@ export class Game {
 
   render() {
     this.ocean.renderReflection(this.renderer, this.scene, this.camera);
+    this.gfx.updateGrade(this.time, this.camera, SUN_DIR);
     this.gfx.render();
   }
 }

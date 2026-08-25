@@ -3,8 +3,11 @@ import { EffectComposer } from '../vendor/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../vendor/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../vendor/jsm/postprocessing/OutputPass.js';
+import { makeGradePass } from './grade.js';
 
 export const QUALITY = ['Hoch', 'Mittel', 'Niedrig'];
+
+const _v = new THREE.Vector3();
 
 /**
  * Rendering pipeline: HDR scene pass -> bloom -> tone mapping.
@@ -29,6 +32,8 @@ export class Renderer {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.5, 1.15);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    this.grade = makeGradePass();
+    this.composer.addPass(this.grade);
     this.setQuality(0);
   }
 
@@ -53,6 +58,10 @@ export class Renderer {
     this.bloomOn = high || mid;
     this.bloom.strength = high ? 0.5 : 0.34;
     this.bloom.enabled = this.bloomOn;
+    if (this.grade) {
+      this.grade.enabled = this.quality < 2;
+      this.grade.uniforms.uGrain.value = high ? 0.035 : 0.02;
+    }
     const cap = high ? 2 : mid ? 1.5 : 1;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, cap));
     this.resize();
@@ -67,8 +76,19 @@ export class Renderer {
     if (this.bloom) this.bloom.resolution.set(w, h);
   }
 
+  /** Feed the glare its screen-space sun position. */
+  updateGrade(time, camera, sunDir) {
+    if (!this.grade) return;
+    const u = this.grade.uniforms;
+    u.uTime.value = time;
+    _v.copy(sunDir).multiplyScalar(4000).add(camera.position);
+    _v.project(camera);
+    const front = _v.z < 1;
+    u.uSun.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5, front ? 1 : 0);
+  }
+
   render() {
-    if (this.bloomOn) this.composer.render();
+    if (this.bloomOn || (this.grade && this.grade.enabled)) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }
 }

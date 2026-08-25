@@ -538,6 +538,25 @@ export class Ship {
       }
     }
 
+    // bow spray: the forefoot slamming into a wave throws water sideways
+    if (!this.submerged && sp > 4) {
+      const fwd = this.forward.clone();
+      const bx = this.pos.x + fwd.x * this.def.hull.length * 0.46;
+      const bz = this.pos.z + fwd.z * this.def.hull.length * 0.46;
+      const wh = waveHeight(bx, bz, time);
+      const bury = wh - (this.pos.y + this.group.rotation.x * this.def.hull.length * 0.46);
+      this.sprayTimer = (this.sprayTimer ?? 0) - dt;
+      if (bury > 0.25 && this.sprayTimer <= 0) {
+        this.sprayTimer = 0.03;
+        const power = clamp(bury * 0.6, 0.4, 2.2) * clamp(sp / this.def.maxSpeed, 0.3, 1.2);
+        for (let i = 0; i < 3; i++) {
+          _v.set(bx + rand(-2, 2), wh + 0.5, bz + rand(-2, 2));
+          _w.set(fwd.x * 6 + rand(-9, 9), rand(6, 16) * power, fwd.z * 6 + rand(-9, 9));
+          game.effects.spray(_v, _w, power);
+        }
+      }
+    }
+
     this.smokeTimer -= dt;
     if (this.smokeTimer <= 0) {
       const hurt = this.healthRatio;

@@ -128,11 +128,35 @@ export class Effects {
     this.soft = new ParticlePool(scene, 3000, THREE.NormalBlending);
     this.flashes = [];
     this.rings = [];
+
+    // A small pool of dynamic lights: muzzle blasts and explosions actually
+    // light up the sea and the hulls around them.
+    this.lights = [];
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.PointLight(0xffb257, 0, 320, 2);
+      l.visible = true;
+      scene.add(l);
+      this.lights.push({ light: l, life: 0, max: 1, peak: 0 });
+    }
+    this.lightCursor = 0;
     this._ringGeo = new THREE.RingGeometry(0.6, 1, 28);
     this._ringGeo.rotateX(-Math.PI / 2);
   }
 
+  /** Flash the sea with a short-lived point light. */
+  addLight(pos, color, intensity, life) {
+    const slot = this.lights.reduce((a, b) => (a.life <= b.life ? a : b));
+    slot.light.position.copy(pos);
+    slot.light.color.setHex(color);
+    slot.peak = intensity;
+    slot.life = life;
+    slot.max = life;
+    slot.light.intensity = intensity;
+    return slot;
+  }
+
   explosion(pos, scale = 1, opts = {}) {
+    this.addLight(pos, opts.light ?? 0xffa845, 900 * scale, 0.5 + scale * 0.25);
     const fireCount = Math.round(18 * scale);
     for (let i = 0; i < fireCount; i++) {
       _v.set(rand(-1, 1), rand(-0.2, 1.4), rand(-1, 1)).normalize().multiplyScalar(rand(4, 22) * scale);
@@ -185,6 +209,7 @@ export class Effects {
       this.soft.spawn(pos, _v, C_SMOKE, rand(3, 6) * scale, rand(0.8, 1.6), { drag: 1.4, gravity: 3, grow: 7, alpha: 0.4 });
     }
     this.addFlash(pos, 2.2 * scale, 0.07, 0xffd08a);
+    this.addLight(pos, 0xffc070, 520 * scale, 0.16);
   }
 
   smokeTrail(pos, color = C_SMOKE, size = 2.2, life = 1.1, alpha = 0.5) {
@@ -204,6 +229,15 @@ export class Effects {
       gravity: -3,
       grow: 4.5 * strength,
       alpha: 0.55,
+    });
+  }
+
+  spray(pos, vel, power = 1) {
+    this.soft.spawn(pos, vel, C_FOAM, rand(1.4, 3.4) * power, rand(0.5, 1.1), {
+      drag: 0.8,
+      gravity: -24,
+      grow: 2.2,
+      alpha: 0.75,
     });
   }
 
@@ -236,6 +270,13 @@ export class Effects {
   update(dt, time) {
     this.fire.update(dt);
     this.soft.update(dt);
+
+    for (const s of this.lights) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      const t = Math.max(s.life, 0) / s.max;
+      s.light.intensity = s.peak * t * t;
+    }
 
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i];

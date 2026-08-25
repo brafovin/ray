@@ -16,9 +16,9 @@ export const SHIPS = [
     weapons: ['gun130', 'cruiseMissile', 'ciws'],
     special: { id: 'barrage', name: 'Sperrfeuer', cooldown: 34, duration: 7 },
     mounts: [
-      { weapon: 'gun130', type: 'turret', pos: [0, 4.9, 26], scale: 1.25 },
-      { weapon: 'gun130', type: 'turret', pos: [0, 6.6, 16], scale: 1.25 },
-      { weapon: 'gun130', type: 'turret', pos: [0, 5.0, -30], scale: 1.25, rear: true },
+      { weapon: 'gun130', type: 'turret', pos: [0, 5.1, 26], scale: 1.5 },
+      { weapon: 'gun130', type: 'turret', pos: [0, 7.0, 16], scale: 1.5 },
+      { weapon: 'gun130', type: 'turret', pos: [0, 5.2, -30], scale: 1.5, rear: true },
       { weapon: 'cruiseMissile', type: 'vls', pos: [0, 4.6, 5], cells: [4, 3] },
       { weapon: 'ciws', type: 'ciws', pos: [5.2, 7.4, -6] },
       { weapon: 'ciws', type: 'ciws', pos: [-5.2, 7.4, -6] },
@@ -37,7 +37,7 @@ export const SHIPS = [
     weapons: ['railgun', 'guidedMissile', 'ciws'],
     special: { id: 'stealth', name: 'Tarnkappe', cooldown: 30, duration: 6 },
     mounts: [
-      { weapon: 'railgun', type: 'turret', pos: [0, 4.4, 22], scale: 1.15, railgun: true },
+      { weapon: 'railgun', type: 'turret', pos: [0, 4.6, 22], scale: 1.32, railgun: true },
       { weapon: 'guidedMissile', type: 'vls', pos: [0, 4.2, 2], cells: [3, 3] },
       { weapon: 'ciws', type: 'ciws', pos: [0, 8.2, -14] },
     ],
@@ -55,7 +55,7 @@ export const SHIPS = [
     weapons: ['gun127', 'missileSalvo', 'ciws'],
     special: { id: 'repair', name: 'Schadenskontrolle', cooldown: 38, duration: 6, heal: 1100 },
     mounts: [
-      { weapon: 'gun127', type: 'turret', pos: [0, 4.6, 25], scale: 1.0 },
+      { weapon: 'gun127', type: 'turret', pos: [0, 4.8, 25], scale: 1.25 },
       { weapon: 'missileSalvo', type: 'vls', pos: [0, 4.3, 12], cells: [4, 2] },
       { weapon: 'missileSalvo', type: 'vls', pos: [0, 4.3, -24], cells: [4, 2] },
       { weapon: 'ciws', type: 'ciws', pos: [0, 9.0, 4] },
@@ -75,7 +75,7 @@ export const SHIPS = [
     weapons: ['autocannon', 'torpedo', 'ciws'],
     special: { id: 'boost', name: 'Nachbrenner', cooldown: 18, duration: 5, factor: 1.55 },
     mounts: [
-      { weapon: 'autocannon', type: 'turret', pos: [0, 3.4, 15], scale: 0.8 },
+      { weapon: 'autocannon', type: 'turret', pos: [0, 3.5, 15], scale: 1.0 },
       { weapon: 'torpedo', type: 'tube', pos: [3.4, 3.2, -4] },
       { weapon: 'torpedo', type: 'tube', pos: [-3.4, 3.2, -4] },
       { weapon: 'ciws', type: 'ciws', pos: [0, 4.2, -16] },
@@ -118,7 +118,7 @@ export const SHIPS = [
       { weapon: 'heavyTorpedo', type: 'tube', pos: [2.6, 0.6, 36] },
       { weapon: 'heavyTorpedo', type: 'tube', pos: [-2.6, 0.6, 36] },
       { weapon: 'cruiseMissile', type: 'vls', pos: [0, 2.4, 8], cells: [2, 2] },
-      { weapon: 'deckgun', type: 'turret', pos: [0, 2.6, -6], scale: 0.75 },
+      { weapon: 'deckgun', type: 'turret', pos: [0, 2.7, -6], scale: 0.95 },
     ],
   },
 ];
