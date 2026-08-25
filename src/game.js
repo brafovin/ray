@@ -443,6 +443,16 @@ export class Game {
     this.spectateTarget = mates[0] ?? this.ships.find((s) => s.alive) ?? null;
   }
 
+  /** Hook for impact feedback that needs game context (sound, HUD). */
+  onImpact(ship, projectile, local) {
+    const d = this.player ? projectile.pos.distanceTo(this.player.pos) : 0;
+    if (d > 2600) return;
+    if (projectile.kind === 'flak') return;
+    this.audio.impact(d, projectile.kind === 'torpedo' ? 1.6 : 1);
+    void ship;
+    void local;
+  }
+
   onIntercept(owner) {
     if (owner === this.player) {
       this.stats.intercepts++;

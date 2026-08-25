@@ -6,8 +6,8 @@ const FORWARD = new THREE.Vector3(0, 0, 1);
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
-const C_MISSILE = new THREE.Color(0xff9a3c);
-const C_RAIL = new THREE.Color(0x7fe6ff);
+const C_MISSILE = new THREE.Color(0xff9a3c).multiplyScalar(2.4);
+const C_RAIL = new THREE.Color(0x7fe6ff).multiplyScalar(3.0);
 
 function glow(color, intensity = 1.6) {
   return new THREE.MeshStandardMaterial({
@@ -90,6 +90,8 @@ export class Projectiles {
     this.game = game;
     this.list = [];
     this.pool = {};
+    this._localHit = new THREE.Vector3();
+    this._normal = new THREE.Vector3();
   }
 
   _acquire(kind) {
@@ -149,6 +151,7 @@ export class Projectiles {
     if (Math.abs(z) > hull.length * 0.52 + marginZ) return false;
     const dy = p.pos.y - ship.pos.y;
     if (dy > hull.deck + 12 || dy < -hull.draft - 3) return false;
+    this._localHit.set(x, dy, z);
     return true;
   }
 
@@ -205,10 +208,37 @@ export class Projectiles {
             game.damage(ship, p.damage, p.owner, p.pos);
             if (p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash, p.weapon.splashDamage, p.owner, ship);
           }
-          const big = p.kind === 'torpedo' ? 2.4 : p.kind === 'flak' ? 0.35 : 1.1;
-          if (p.kind === 'flak') fx.addFlash(p.pos, 1.0, 0.06, 0xfff1b8);
-          else fx.explosion(p.pos, big);
-          if (p.kind === 'torpedo') fx.waterSplash(p.pos, 2.6);
+          // impact dressing depends on what hit what and at which angle
+          const back = this._normal.copy(p.vel).normalize().negate();
+          if (p.kind === 'flak') {
+            fx.addFlash(p.pos, 1.0, 0.06, 0xfff1b8);
+            fx.ricochet(p.pos, back, 0.4);
+          } else if (p.kind === 'torpedo') {
+            fx.explosion(p.pos, 2.4);
+            fx.waterColumn(p.pos, 3.0);
+            ship.onHit(p.pos, 2.2, this._localHit);
+          } else if (p.kind === 'missile' || p.kind === 'drone') {
+            fx.explosion(p.pos, 1.5);
+            fx.impact(p.pos, back, 1.6, 'missile');
+            ship.onHit(p.pos, 1.6, this._localHit);
+          } else {
+            // shallow angle on the ship's side plating deflects the round
+            const side = Math.sign(this._localHit.x) || 1;
+            const c = Math.cos(ship.heading);
+            const sn = Math.sin(ship.heading);
+            const nx = c * side;
+            const nz = -sn * side;
+            const graze = Math.abs(back.x * nx + back.z * nz);
+            const scale = p.kind === 'rail' ? 1.5 : 0.55 + p.damage / 420;
+            if (graze < 0.28 && Math.abs(this._localHit.y) < ship.def.hull.deck) {
+              fx.ricochet(p.pos, back, scale);
+              fx.impact(p.pos, back, scale * 0.5, p.kind);
+            } else {
+              fx.impact(p.pos, back, scale, p.kind);
+              ship.onHit(p.pos, scale, this._localHit);
+            }
+          }
+          game.onImpact(ship, p, this._localHit);
           if (p.weapon.pierce && p.pierced < 1) {
             p.pierced++;
             p.damage *= 0.55;
@@ -242,7 +272,8 @@ export class Projectiles {
           if (p.kind === 'flak') {
             done = true;
           } else {
-            fx.waterSplash(p.pos, p.kind === 'shell' ? 1.4 : 2.0);
+            if (p.kind === 'shell' || p.kind === 'rail') fx.waterColumn(p.pos, p.weapon.damage > 250 ? 1.5 : 1.0);
+            else fx.waterSplash(p.pos, 2.0);
             if (p.local && p.weapon.splashDamage) game.splashDamage(p.pos, p.weapon.splash * 0.7, p.weapon.splashDamage * 0.5, p.owner);
             done = true;
           }

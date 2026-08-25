@@ -24,6 +24,9 @@ export class Ship {
     this.name = opts.name ?? def.name;
 
     const built = buildShipMesh(def);
+    this.mats = built.materials;
+    this.fires = [];
+    this.hitFlash = 0;
     this.group = built.root;
     this.mounts = built.mounts;
     this.radars = built.radars;
@@ -77,6 +80,48 @@ export class Ship {
     this.netTarget = { x: this.pos.x, z: this.pos.z, h: this.heading };
     this.teamColor = opts.teamColor ?? (team === 0 ? 0x49b6ff : 0xff5340);
     addTeamMarkings(this.group, def, this.teamColor);
+  }
+
+  /**
+   * Dress a hit on this hull: the plating flares white-hot for an instant and
+   * a fire keeps burning at the impact point.
+   */
+  onHit(worldPos, scale, local) {
+    this.hitFlash = 0.14;
+    if (this.fires.length < 8 && (scale > 0.9 || Math.random() < 0.4)) {
+      this.fires.push({
+        x: local.x * 0.9,
+        y: Math.max(local.y, this.def.hull.deck * 0.2),
+        z: local.z * 0.95,
+        life: 3 + scale * 4,
+        strength: Math.min(1.4, 0.5 + scale * 0.5),
+      });
+    }
+  }
+
+  _updateHitDressing(dt, time, game) {
+    if (this.hitFlash > 0) {
+      this.hitFlash -= dt;
+      const k = Math.max(this.hitFlash, 0) / 0.14;
+      const e = 0.9 * k;
+      for (const key of ['hull', 'deck', 'trim']) {
+        const m = this.mats[key];
+        if (!m) continue;
+        m.emissive.setRGB(e * 0.9, e * 0.45, e * 0.15);
+      }
+    }
+    for (let i = this.fires.length - 1; i >= 0; i--) {
+      const f = this.fires[i];
+      f.life -= dt;
+      if (f.life <= 0) {
+        this.fires.splice(i, 1);
+        continue;
+      }
+      if (this.submerged) continue;
+      _v.set(f.x, f.y, f.z).applyQuaternion(this.group.quaternion).add(this.pos);
+      const fade = Math.min(1, f.life / 2);
+      game.effects.flame(_v, f.strength * fade);
+    }
   }
 
   /** Latest snapshot from the owning client. */
@@ -314,12 +359,14 @@ export class Ship {
 
     if (def.kind === 'shell' || def.kind === 'rail') {
       game.effects.muzzleFlash(_v, dir, def.kind === 'rail' ? 1.6 : mount.def.scale ?? 1);
+      if (def.cooldown < 0.6) game.effects.casings(_v, dir, 2);
       if (mount.pitch) mount.pitch.position.z -= 0.25; // recoil, sprung back below
       mount.recoil = 0.35;
     } else if (def.kind === 'flak') {
       game.effects.addFlash(_v, 0.7, 0.05, 0xfff3c0);
+      game.effects.casings(_v, dir, 1);
     } else if (def.kind === 'missile' || def.kind === 'drone') {
-      game.effects.explosion(_v, 0.35, { ring: false });
+      game.effects.launchPlume(_v, dir, mount.vertical ? 1.3 : 1.0);
     } else if (def.kind === 'torpedo') {
       game.effects.waterSplash(_v, 1.2);
     }
@@ -592,6 +639,7 @@ export class Ship {
     this._autoDefense(dt, game);
     this._updateWeapons(dt, game);
     this._cosmetics(dt, time, game);
+    this._updateHitDressing(dt, time, game);
   }
 
   _sink(dt, time, game) {

@@ -101,6 +101,14 @@ export class Audio {
     this._tone({ freq: 90, to: 28, gain: 0.5 * att * scale, decay: 1.1 * scale, distance });
   }
 
+  /** Steel taking a hit: a clang plus a low thud that carries. */
+  impact(distance, scale = 1) {
+    const att = Math.max(0.05, 1 - distance / 2600);
+    this._burst({ gain: 0.32 * att * scale, decay: 0.22 * scale, filter: 2200, type: 'bandpass', q: 1.4, distance });
+    this._tone({ freq: 240 / scale, to: 60, gain: 0.3 * att * scale, decay: 0.5 * scale, type: 'triangle', distance });
+    this._tone({ freq: 1400, to: 700, gain: 0.1 * att, decay: 0.12, type: 'square', distance });
+  }
+
   hit() {
     this._tone({ freq: 1200, to: 900, gain: 0.12, decay: 0.08, type: 'square' });
   }

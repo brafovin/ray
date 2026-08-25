@@ -128,8 +128,17 @@ Adresse dieses Rechners im Browser öffnen.
 * **Waffen** — ballistische Granaten, durchschlagende Railgun-Geschosse, Raketen mit
   Boost-, Marsch- und Endanflugphase, Torpedos knapp unter der Oberfläche,
   Kamikaze-Drohnen und Flak zur Raketenabwehr.
-* **Effekte** — zwei GPU-Partikelsysteme (additiv und alpha) in je einem Draw-Call:
-  Explosionen, Rauch, Funken, Kielwasser, Bugschaum, Blasen, Mündungsfeuer.
+* **Effekte** — zwei GPU-Partikelsysteme (additiv und alpha) in je einem Draw-Call,
+  dazu ein Pool aus Blast-Kegeln, Druckringen, Feuerbällen und Wassersäulen.
+  **Beim Schuss**: Mündungskegel, Druckring, Qualmwolke, ausgeworfene Patronenhülsen
+  bei Schnellfeuerwaffen, Rohrrücklauf, Kamerastoß und ein dynamisches Licht, das
+  Wasser und Rumpf anleuchtet. Raketen bekommen eine Startfackel mit Abgasstrahl
+  und Deckswäsche. **Beim Treffer**: weißglühender Blitz, Schockring, Funkenregen
+  entgegen der Einschlagrichtung, weggerissene Plattenstücke, Feuerball und Qualm —
+  und das getroffene Schiff glüht kurz auf und **brennt an der Einschlagstelle weiter**.
+  Flache Auftreffwinkel auf die Bordwand geben einen **Abpraller** mit Funkenschauer.
+  Schüsse ins Wasser reißen eine hohe **Wassersäule** samt Schaumring auf.
+  Alle Feuerfarben liegen über Weiß, damit der Bloom sie aufgreift.
 * **Sound** — komplett per WebAudio synthetisiert, keine Audiodateien.
 
 ### Projektstruktur
